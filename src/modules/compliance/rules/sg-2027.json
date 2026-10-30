@@ -1,0 +1,47 @@
+{
+  "id": "sg-citizen-2027-v1",
+  "effectiveFrom": "2027-01-01",
+  "effectiveTo": "2027-12-31",
+  "checkedAt": "2026-10-29",
+  "cpfSource": "https://www.cpf.gov.sg/content/dam/web/employer/employer-obligations/documents/jan2027cpfcontributionrates.pdf",
+  "sdlSource": "https://www.cpf.gov.sg/employer/employer-obligations/skills-development-levy",
+  "owCeilingCents": 800000,
+  "annualCeilingCents": 10200000,
+  "bands": [
+    {
+      "maxAge": 55,
+      "employer": "0.17",
+      "phase": "0.60",
+      "total": "0.37",
+      "employee": "0.20"
+    },
+    {
+      "maxAge": 60,
+      "employer": "0.165",
+      "phase": "0.57",
+      "total": "0.355",
+      "employee": "0.19"
+    },
+    {
+      "maxAge": 65,
+      "employer": "0.13",
+      "phase": "0.39",
+      "total": "0.26",
+      "employee": "0.13"
+    },
+    {
+      "maxAge": 70,
+      "employer": "0.09",
+      "phase": "0.225",
+      "total": "0.165",
+      "employee": "0.075"
+    },
+    {
+      "maxAge": 150,
+      "employer": "0.075",
+      "phase": "0.15",
+      "total": "0.125",
+      "employee": "0.05"
+    }
+  ]
+}

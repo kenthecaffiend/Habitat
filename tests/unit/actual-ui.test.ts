@@ -1,0 +1,5 @@
+import {it,expect} from 'vitest';import React from 'react';import {renderToStaticMarkup} from 'react-dom/server';import {WorkflowCards} from '../../src/components/workflow-cards';
+it('actual-mode workflow cards advertise only the existing employee and draft payroll paths',()=>{const html=renderToStaticMarkup(React.createElement(WorkflowCards,{actualDraftOnly:true} as any));expect(html).toContain('/admin/employees');expect(html).toContain('/admin/payroll');for(const copy of ['confirm a payment date','approve expenses','Upload an invented','/employee/leave','/admin/claims'])expect(html).not.toContain(copy);});
+
+import Login from '../../src/app/login/page';import {ActualDraftContext} from '../../src/components/runtime-mode';
+it('login uses final private-workspace language without a synthetic hydration flash',()=>{const html=renderToStaticMarkup(React.createElement(ActualDraftContext.Provider,{value:true},React.createElement(Login)));expect(html).toContain('Private workspace');expect(html).not.toContain('Private synthetic demo');expect(html).not.toContain('Invented demo accounts only');});

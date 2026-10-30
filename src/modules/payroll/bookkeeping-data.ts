@@ -1,0 +1,17 @@
+import {createHash} from 'node:crypto';import {calculatePayroll} from './calculate';import {canonical} from '../payslips/template';import {parseDate} from '../calendar';
+export const snapshotHash=(value:unknown)=>createHash('sha256').update(canonical(value)).digest('hex');
+export class BookkeepingReviewRequired extends Error {}
+export function validateDraftCalculation(snapshot:any,employeeId:string,period:string){
+ if(!snapshot?.monthlySavedSettings||snapshot.input?.employeeId!==employeeId||snapshot.input.salaryMonth!==period||snapshot.input.contributionMonth!==period)throw Error('Recalculate the saved monthly draft before finalising');
+ const calculation=calculatePayroll(snapshot.input);if(!calculation.ok||canonical(calculation.value)!==canonical(snapshot.calculation))throw Error('Draft calculation changed; recalculate before finalising');
+ const flags=calculation.value.reviewFlags.filter(f=>f!=='annual_history_unreconciled');if(flags.length)throw new BookkeepingReviewRequired(flags.includes('year_end_actual_ow_review_required')?'Year-end CPF totals need review before finalising this payroll.':flags.includes('annual_aw_reconciliation_required')?'Bonus CPF assessment needs review before finalising this payroll.':'Prior CPF adjustments need review before finalising this payroll.');
+ if(!Array.isArray(snapshot.claims)||snapshot.claims.reduce((n:number,c:any)=>n+Number(c.amount_cents),0)!==calculation.value.reimbursementCents)throw Error('Captured claims do not match reimbursement');
+ return calculation.value;
+}
+export type FrozenEntry={entryId:string;employeeId:string;employeeName:string;companyName:string;snapshot:any;originalHash?:string;branding?:{lightLogo:{id:string;sha256:string}}};
+export function paymentDocumentData(entry:FrozenEntry,date:string,eventId:string){
+ parseDate(date);const p=entry.snapshot.input,c=validateDraftCalculation(entry.snapshot,entry.employeeId,p.salaryMonth);if(date<p.salaryMonth+'-01')throw Error('Payment date predates salary period');
+ const end=new Date(Date.UTC(Number(p.salaryMonth.slice(0,4)),Number(p.salaryMonth.slice(5)),0)).toISOString().slice(0,10);
+ const data={actualIssued:false as const,livePayrollAllowed:false as const,readyForProfessionalReview:true as const,schemaVersion:1 as const,...(entry.branding?{branding:entry.branding}:{}),payslip:{employerFullName:entry.companyName,employeeFullName:entry.employeeName,basicSalaryCents:p.monthlySalaryCents,salaryPeriod:{start:p.salaryMonth+'-01',end},paymentDates:[date],allowances:[],additionalPayments:p.bonusCents?[{code:'bonus',amountCents:p.bonusCents}]:[],deductions:[...(c.unpaidDeductionCents?[{code:'unpaid_leave',amountCents:c.unpaidDeductionCents}]:[]),{code:'employee_cpf',amountCents:c.employeeCpfCents},...c.fundDeductions.filter((f:any)=>f.amountCents>0).map((f:any)=>({code:f.fund,amountCents:f.amountCents}))],netSalaryPaidCents:c.netWagesCents,overtime:{status:'not-applicable' as const}},supplementary:{contributionMonth:p.contributionMonth,employerCpfCents:c.employerCpfCents,sdlDisplayOnlyCents:c.sdlCents,netWagesDueCents:c.netWagesCents,reimbursementDueCents:c.reimbursementCents,reimbursementPaidCents:c.reimbursementCents,totalBankPaidCents:c.bankTransferCents,outstandingWagesCents:0,outstandingReimbursementsCents:0},evidence:{employeeId:entry.employeeId,payments:[{id:eventId,date,wageCents:c.netWagesCents,reimbursementCents:c.reimbursementCents}]},correction:null};
+ return {...data,snapshotHash:snapshotHash(data)};
+}

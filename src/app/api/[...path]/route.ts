@@ -1,0 +1,1 @@
+import {getApplication} from '../../../server/runtime';export const dynamic='force-dynamic';export const runtime='nodejs';export async function GET(request:Request){return (await getApplication()).handle(request);}export const POST=GET;

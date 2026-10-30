@@ -1,0 +1,17 @@
+{
+  "enabled": false,
+  "companyId": "00000000-0000-4000-8000-000000000001",
+  "salaryMonths": [
+    "2026-10"
+  ],
+  "profile": {
+    "workingWeekdays": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "restDay": 0
+  }
+}

@@ -1,0 +1,7 @@
+'use client';
+import {DateInput} from './date-input';
+export function PayrollPayment({run,busy,onSave}:{run:any;busy:boolean;onSave:(input:any)=>void}){
+ const dates=[...new Set<string>(run.entries.map((e:any)=>e.paymentDate.date).filter(Boolean))],paid=run.entries.filter((e:any)=>e.paymentDate.date).length;
+ if(paid===run.entries.length&&paid>0)return <section className="payment-recording"><h3>Payment recorded</h3><p>{dates.join(', ')}</p></section>;
+ return <details className="payment-recording"><summary>Record payment</summary>{run.state!=='approved'&&<p>Finalise this payroll before recording payment.</p>}<p>{paid} of {run.entries.length} employees have a payment date.{dates.length>1?' Different dates are recorded. They will be preserved unless you confirm a correction.':''}</p><form className="workflow-form" onSubmit={e=>{e.preventDefault();if(busy||run.state!=='approved')return;const f=new FormData(e.currentTarget);onSave({id:run.id,revision:run.revision,date:String(f.get('date')??''),paymentRevisions:run.entries.map((e:any)=>({entryId:e.id,revision:e.paymentDate.revision}))});}}><fieldset disabled={busy||run.state!=='approved'}><legend>Payment date for this payroll</legend><label>Actual payment date<DateInput name="date" defaultValue={dates.length===1?dates[0]:''} min={run.month+'-01'} max={new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'})} required/></label><p>Applies to the employees included in this saved payroll.</p><button>Record payment</button><p>Payslips are generated automatically.</p></fieldset></form></details>;
+}

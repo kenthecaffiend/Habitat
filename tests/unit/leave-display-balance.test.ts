@@ -1,0 +1,3 @@
+import {it,expect} from 'vitest';import {annualDisplayDays} from '../../src/modules/leave/display-balance';
+it('combines only this year and valid prior carryover, excluding future grants',()=>{expect(annualDisplayDays({'2024':99,'2025':5,'2026':28,'2027':28},'2026-10-27')).toBe(16.5);expect(annualDisplayDays({'2025':5,'2026':28,'2027':28},'2027-01-01')).toBe(28);});
+it('keeps unknown distinct from an explicit zero',()=>{expect(annualDisplayDays(undefined,'2026-10-27')).toBeNull();expect(annualDisplayDays({'2025':5},'2026-10-27')).toBeNull();expect(annualDisplayDays({'2026':0},'2026-10-27')).toBe(0);});

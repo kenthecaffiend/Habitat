@@ -1,0 +1,2 @@
+import {renderPdf} from './runner';import {PreviewRejected} from '../documents/outcomes';
+try{let size=0;const parts:Buffer[]=[];for await(const part of process.stdin){size+=part.length;if(size>131072)throw new PreviewRejected('input','Layout too large');parts.push(part);}process.stdout.write(renderPdf(JSON.parse(Buffer.concat(parts).toString())));}catch(e){if(e instanceof PreviewRejected){process.stderr.write(JSON.stringify({kind:e.kind}));process.exitCode=2;}else{process.stderr.write('Unconfirmed isolated PDF processing');process.exitCode=1;}}

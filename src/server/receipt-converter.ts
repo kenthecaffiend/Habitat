@@ -1,0 +1,10 @@
+import {spawn} from 'node:child_process';import {join} from 'node:path';import {createHash} from 'node:crypto';import type {Converter} from '../modules/files/synthetic-store';import {RECEIPT_LIMITS as L} from '../modules/files/limits';import {PreviewRejected} from '../../ops/documents/outcomes';
+export const isolatedReceiptConverter:Converter=async(bytes,mime)=>{
+ const output=await new Promise<Buffer>((resolve,reject)=>{
+  const child=spawn(process.execPath,[join(process.cwd(),'node_modules/tsx/dist/cli.mjs'),join(process.cwd(),'ops/documents/convert-cli.ts'),mime],{stdio:['pipe','pipe','pipe']});let size=0,errorText='',failure:Error|undefined;const chunks:Buffer[]=[];
+  const timer=setTimeout(()=>{failure=Error('Processing deadline; operator review required');child.kill('SIGKILL');},75000);
+  child.stdout.on('data',(b:Buffer)=>{size+=b.length;if(size>L.previewBytes){failure=Error('Processing output exceeded bound');child.kill('SIGKILL');}else chunks.push(b);});child.stderr.on('data',(b:Buffer)=>{errorText=(errorText+b.toString()).slice(0,4096);});child.stdin.on('error',()=>{});
+  child.on('error',error=>{failure=error;});child.on('close',code=>{clearTimeout(timer);if(failure)return reject(failure);if(code===0)return resolve(Buffer.concat(chunks));if(code===2){try{const kind=JSON.parse(errorText).kind;if(['input','decoder','timeout','output'].includes(kind))return reject(new PreviewRejected(kind,'Image refused by isolated processor'));}catch{}}reject(Error('Processing outcome requires operator review'));});child.stdin.end(bytes);
+ });
+ const hash=(b:Buffer)=>createHash('sha256').update(b).digest('hex');return {bytes:output,originalHash:hash(bytes),previewHash:hash(output)};
+};

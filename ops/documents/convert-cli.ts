@@ -1,0 +1,3 @@
+// Fixed child-process adapter. Input bytes only; no user-controlled commands or paths.
+import {readFileSync} from 'node:fs';import {previewSyntheticImage} from './runner';import {PreviewRejected} from './outcomes';
+try{const mime=process.argv[2];if(mime!=='image/png'&&mime!=='image/jpeg')throw Error('MIME');const out=previewSyntheticImage(readFileSync(0),mime,true);process.stdout.write(out.bytes);}catch(error){if(error instanceof PreviewRejected){process.stderr.write(JSON.stringify({kind:error.kind}));process.exitCode=2;}else{process.stderr.write('Isolated processing requires operator review');process.exitCode=1;}}

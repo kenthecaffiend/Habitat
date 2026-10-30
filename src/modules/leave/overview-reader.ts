@@ -1,0 +1,15 @@
+import type{Pool}from'pg';import{validDate,moveDate}from'../../components/date-picker-model';import{sourceBookingKey,sourceDateRange}from'./opening';import{singaporeDay,type CalendarLeave}from'./overview-calendar';
+/** Source observations remain read-only. A linked Habitat decision always takes precedence. */
+export function mergeCalendarLeave(native:any[],sources:any[]):CalendarLeave[]{
+ const entries:CalendarLeave[]=native.filter(r=>['approved','pending'].includes(r.state)).map(r=>({id:r.id,employeeId:r.employee_id,name:r.name,type:r.category||r.kind,state:r.state,dates:[...new Set<string>((r.slots??[]).map((s:any)=>s.date).filter((d:any)=>typeof d==='string'&&validDate(d)))]}));
+ const seen=new Set(native.filter(r=>r.source_key).map(r=>r.employee_id+':'+r.source_key));
+ for(const source of sources){let rows:any[];try{rows=JSON.parse(source.history??'{}').rows??[];if(!Array.isArray(rows))continue;}catch{continue;}for(const row of rows){if(!row||typeof row!=='object')continue;const state=String(row.status??'').trim().toLowerCase();if(!['approved','pending'].includes(state))continue;const range=sourceDateRange(String(row.dates??''),'1d');if(!range||range.start>range.end||Date.parse(range.end)-Date.parse(range.start)>732*86400000)continue;const key=sourceBookingKey(row),binding=source.employee_id+':'+key;if(seen.has(binding))continue;seen.add(binding);const dates:string[]=[];for(let day=range.start;day<=range.end;day=moveDate(day,1))dates.push(day);entries.push({id:'source-'+binding,employeeId:source.employee_id,name:source.name,type:String(row.type??'Leave'),state,dates,source:'AIMM'});}}
+ return entries;
+}
+/** Existing admin overview only; no reasons, medical files, balance calculations or writes. */
+export async function overviewCalendar(pool:Pool){try{
+ const native=(await pool.query(`SELECT r.id,r.employee_id,r.kind,r.input->>'category' AS category,r.state,r.slots,to_jsonb(r)->>'source_key' AS source_key,coalesce(nullif((SELECT p.personal->>'Display name' FROM employee_profile_revision p WHERE p.employee_id=e.id ORDER BY p.created_at DESC,p.id DESC LIMIT 1),''),u.name) AS name FROM leave_request r JOIN employee e ON e.id=r.employee_id JOIN "user" u ON u.id=e.user_id WHERE e.active ORDER BY r.id`)).rows;
+ const sourceTable=(await pool.query("SELECT to_regclass('public.employee_source_snapshot') AS name")).rows[0]?.name;
+ const sources=sourceTable?(await pool.query(`SELECT DISTINCT ON(b.employee_id) b.employee_id,s.fields->>'Request history' AS history,coalesce(nullif((SELECT p.personal->>'Display name' FROM employee_profile_revision p WHERE p.employee_id=e.id ORDER BY p.created_at DESC,p.id DESC LIMIT 1),''),u.name) AS name FROM employee_source_snapshot s JOIN employee_source_binding b ON b.id=s.binding_id JOIN employee e ON e.id=b.employee_id JOIN "user" u ON u.id=e.user_id WHERE e.active AND s.section='leave' ORDER BY b.employee_id,s.received_at DESC,s.id DESC`)).rows:[];
+ return{today:singaporeDay(),entries:mergeCalendarLeave(native,sources)};
+ }catch{return{today:singaporeDay(),entries:[] as CalendarLeave[],unavailable:true};}}

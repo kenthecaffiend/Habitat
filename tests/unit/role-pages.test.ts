@@ -1,0 +1,9 @@
+import{it,expect,vi}from'vitest';import React from'react';import{renderToStaticMarkup}from'react-dom/server';
+const state=vi.hoisted(()=>({role:'employee',status:200}));
+vi.mock('next/headers',()=>({headers:async()=>new Headers({'x-return-to':'https://outside.invalid/admin','callbackURL':'/admin'})}));
+vi.mock('next/navigation',()=>({redirect:(path:string)=>{throw new Error('REDIRECT:'+path);}}));
+vi.mock('../../src/server/runtime',()=>({getApplication:async()=>({handle:async()=>Response.json({role:state.role},{status:state.status})})}));
+import Home from'../../src/app/page';import AdminLayout from'../../src/app/admin/layout';import{WorkspaceViewSwitch}from'../../src/components/workspace-view-switch';
+it('routes employee and admin sessions from trusted role, ignoring stale/external return headers',async()=>{state.status=200;state.role='employee';await expect(Home()).rejects.toThrow('REDIRECT:/employee');state.role='admin';await expect(Home()).rejects.toThrow('REDIRECT:/admin');state.status=401;await expect(Home()).rejects.toThrow('REDIRECT:/login');});
+it('redirects employee direct admin-page requests without rendering admin children',async()=>{state.status=200;state.role='employee';await expect(AdminLayout({children:'PRIVATE ADMIN CONTENT'})).rejects.toThrow('REDIRECT:/employee');state.role='admin';expect(await AdminLayout({children:'PRIVATE ADMIN CONTENT'})).toBe('PRIVATE ADMIN CONTENT');});
+it('never renders a view-switch affordance for employee or unresolved sessions in either workspace',()=>{for(const role of ['employee',null])for(const admin of [true,false])expect(renderToStaticMarkup(React.createElement(WorkspaceViewSwitch,{role,admin}))).toBe('');expect(renderToStaticMarkup(React.createElement(WorkspaceViewSwitch,{role:'admin',admin:false}))).toContain('Admin View');expect(renderToStaticMarkup(React.createElement(WorkspaceViewSwitch,{role:'admin',admin:true}))).toContain('My employee view');});

@@ -1,0 +1,3 @@
+import {it,expect} from 'vitest';import {parseSGD,formatSGD} from '../../src/modules/claims/amount';
+it('parses exact cents without float rounding and rejects unsupported input',()=>{expect(parseSGD('12.34')).toBe(1234);expect(parseSGD('0.01')).toBe(1);expect(parseSGD('90071992547409.91')).toBe(Number.MAX_SAFE_INTEGER);for(const bad of ['0','-1','1.234','1e3','Infinity','90071992547409.92',''])expect(parseSGD(bad)).toBeNull();});
+it('formats safe integer cents without losing final cent at the upper boundary',()=>{expect(formatSGD('9007199254740991')).toBe('90071992547409.91');expect(formatSGD(1200)).toBe('12.00');});

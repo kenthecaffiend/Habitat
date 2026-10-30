@@ -1,0 +1,1 @@
+CREATE TABLE private_receipt_file(attachment_id uuid PRIMARY KEY REFERENCES private_attachment(id) ON DELETE CASCADE,store_id uuid NOT NULL,actor_id text NOT NULL REFERENCES "user"(id),request_key uuid NOT NULL,fingerprint text NOT NULL,preview_hash text NOT NULL,preview_size integer NOT NULL CHECK(preview_size BETWEEN 1 AND 4194304),UNIQUE(actor_id,request_key));

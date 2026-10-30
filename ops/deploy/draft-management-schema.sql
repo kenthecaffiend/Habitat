@@ -1,0 +1,16 @@
+-- Explicit working-only recoverable discard; no new application grants or data deletion.
+BEGIN;
+DO $$ BEGIN IF current_database()<>'hr_actual_test' OR (SELECT environment FROM environment_identity WHERE id=1)<>'actual-test' OR (SELECT version FROM bookkeeping_schema WHERE id=1)<>1 THEN RAISE EXCEPTION 'Wrong draft-management target'; END IF; END $$;
+ALTER TABLE bookkeeping_schema ADD COLUMN draft_management boolean NOT NULL DEFAULT true CHECK(draft_management);
+ALTER TABLE payroll_run DROP CONSTRAINT actual_bookkeeping_run;
+ALTER TABLE payroll_run ADD CONSTRAINT actual_bookkeeping_run CHECK(state IN ('draft','approved','void') AND cpf_payment IS NULL AND acknowledgement IS NULL);
+ALTER TABLE payroll_run DROP CONSTRAINT payroll_run_month_key;
+CREATE UNIQUE INDEX one_active_payroll_month ON payroll_run(month) WHERE state<>'void';
+CREATE OR REPLACE FUNCTION actual_test_run_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF TG_OP='UPDATE' AND OLD.state IN ('draft','approved') AND NEW.state='void' AND NEW.revision=OLD.revision+1 AND (to_jsonb(OLD)-ARRAY['state','revision'])=(to_jsonb(NEW)-ARRAY['state','revision']) AND EXISTS(SELECT FROM payroll_draft_revision d WHERE d.run_id=OLD.id AND d.revision=OLD.revision AND d.roster=OLD.roster AND d.capture=OLD.capture) AND NOT EXISTS(SELECT FROM payroll_entry e WHERE e.run_id=OLD.id AND (EXISTS(SELECT FROM payroll_payment p WHERE p.entry_id=e.id) OR EXISTS(SELECT FROM payslip_obligation p WHERE p.entry_id=e.id) OR EXISTS(SELECT FROM payroll_paid_status p WHERE p.entry_id=e.id AND (p.paid OR p.payment_date IS NOT NULL)))) THEN RETURN NEW; END IF;
+ IF TG_OP='UPDATE' AND OLD.state='draft' AND NEW.state='approved' AND NEW.revision=OLD.revision+1 AND (to_jsonb(OLD)-ARRAY['state','revision'])=(to_jsonb(NEW)-ARRAY['state','revision']) AND EXISTS(SELECT FROM payroll_finalisation f WHERE f.run_id=OLD.id AND f.revision=NEW.revision) THEN RETURN NEW; END IF;
+ IF TG_OP<>'UPDATE' OR OLD.state<>'draft' OR NEW.state<>'draft' OR NEW.revision<>OLD.revision+1 OR (to_jsonb(OLD)-ARRAY['revision','roster','capture'])<>(to_jsonb(NEW)-ARRAY['revision','roster','capture']) OR EXISTS(SELECT FROM payroll_finalisation f WHERE f.run_id=OLD.id) OR EXISTS(SELECT FROM payroll_entry e WHERE e.run_id=OLD.id AND EXISTS(SELECT FROM payslip_obligation p WHERE p.entry_id=e.id)) THEN RAISE EXCEPTION 'Finalised or discarded payroll is immutable'; END IF;RETURN NEW;END $$;
+CREATE FUNCTION actual_payroll_starts_as_draft() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.state<>'draft' OR NEW.revision<>1 OR NEW.cpf_payment IS NOT NULL OR NEW.acknowledgement IS NOT NULL THEN RAISE EXCEPTION 'New payroll must start as an unissued draft'; END IF;RETURN NEW;END $$;
+CREATE TRIGGER payroll_starts_as_draft BEFORE INSERT ON payroll_run FOR EACH ROW EXECUTE FUNCTION actual_payroll_starts_as_draft();
+CREATE OR REPLACE FUNCTION protect_finalised_entry() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF EXISTS(SELECT FROM payroll_finalisation f WHERE f.run_id=OLD.run_id) OR EXISTS(SELECT FROM payroll_run r WHERE r.id=OLD.run_id AND r.state='void') THEN RAISE EXCEPTION 'Finalised or discarded entry is immutable'; END IF;IF TG_OP='DELETE' THEN RETURN OLD;END IF;RETURN NEW;END $$;
+COMMIT;

@@ -1,0 +1,5 @@
+import{validDate}from'../../components/date-picker-model';
+export type CalendarLeave={id:string;employeeId:string;name:string;type:string;state:string;dates:string[];source?:'AIMM'};
+export const singaporeDay=(now=new Date())=>now.toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});
+export function upcomingLeave(entries:CalendarLeave[],today:string){const groups=new Map<string,{employeeId:string;name:string;requests:CalendarLeave[]}>();for(const entry of entries){if(!['approved','pending'].includes(entry.state))continue;const dates=entry.dates.filter(d=>validDate(d)&&d>=today).sort();if(!dates.length)continue;const group=groups.get(entry.employeeId)??{employeeId:entry.employeeId,name:entry.name,requests:[]};group.requests.push({...entry,dates});groups.set(entry.employeeId,group);}return [...groups.values()].map(g=>({...g,requests:g.requests.sort((a,b)=>a.dates[0].localeCompare(b.dates[0]))})).sort((a,b)=>a.name.localeCompare(b.name)||a.employeeId.localeCompare(b.employeeId));}
+export const calendarLeaveStatus=(entry:CalendarLeave)=>(entry.state==='approved'?'Approved':'Pending')+(entry.source==='AIMM'?' in AIMM':'');

@@ -1,0 +1,28 @@
+// Pipe only into the approved isolated database as its owner. SQL contains a private role secret; never log it.
+import {readFileSync,readdirSync} from 'node:fs';import {join} from 'node:path';
+const root=process.argv[2];if(!root?.endsWith('/AI-Server/hr/actual-test'))throw Error('ACTUAL_ROOT');const password=readFileSync(join(root,'secrets/app_db'),'utf8').trim();if(!/^[a-f0-9]{96}$/.test(password))throw Error('APP_SECRET');const files=readdirSync('db/migrations').filter(f=>/^\d{4}.*\.sql$/.test(f)&&Number(f.slice(0,4))<=19).sort();if(files.length!==19||files.some((f,i)=>Number(f.slice(0,4))!==i+1))throw Error('MIGRATION_SET');
+let sql="\\set ON_ERROR_STOP on\nBEGIN;\nDO $$ BEGIN IF current_database()<>'hr_actual_test' OR current_user<>'hr_actual_test_owner' THEN RAISE EXCEPTION 'Wrong actual-test target'; END IF; IF EXISTS(SELECT FROM pg_tables WHERE schemaname='public') THEN RAISE EXCEPTION 'Nonempty target refused'; END IF; END $$;\nCREATE TABLE environment_identity(id integer PRIMARY KEY CHECK(id=1),environment text NOT NULL CHECK(environment='actual-test'));INSERT INTO environment_identity VALUES(1,'actual-test');CREATE TABLE schema_migration(version integer PRIMARY KEY);\n";
+for(const [i,f]of files.entries())sql+=readFileSync(join('db/migrations',f),'utf8')+'\nINSERT INTO schema_migration VALUES('+(i+1)+');\n';
+sql+=`REVOKE ALL ON DATABASE hr_actual_test FROM PUBLIC; REVOKE ALL ON SCHEMA public FROM PUBLIC;
+ALTER ROLE hr_actual_test_app PASSWORD '${password}';
+GRANT CONNECT ON DATABASE hr_actual_test TO hr_actual_test_app; GRANT USAGE ON SCHEMA public TO hr_actual_test_app; GRANT SELECT ON ALL TABLES IN SCHEMA public TO hr_actual_test_app;
+GRANT INSERT ON branding_asset,branding_command TO hr_actual_test_app; GRANT UPDATE(light,dark,revision) ON branding_setting TO hr_actual_test_app;
+GRANT INSERT ON "user",account,employee,employee_directory,employee_command,bootstrap_state,audit_event,payroll_profile,payroll_intent,payroll_run,payroll_entry TO hr_actual_test_app;
+GRANT UPDATE(revision) ON payroll_run TO hr_actual_test_app;
+GRANT UPDATE(active) ON employee TO hr_actual_test_app;
+GRANT UPDATE(version) ON import_target_version TO hr_actual_test_app;
+GRANT UPDATE(name,email,updated_at) ON "user" TO hr_actual_test_app; GRANT UPDATE(revision,updated_at) ON employee_directory TO hr_actual_test_app;
+GRANT INSERT,UPDATE,DELETE ON session,rate_limit TO hr_actual_test_app;
+CREATE FUNCTION actual_test_run_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Actual-data drafts are immutable'; END $$;
+CREATE TRIGGER actual_test_run_immutable BEFORE UPDATE OR DELETE ON payroll_run FOR EACH ROW EXECUTE FUNCTION actual_test_run_immutable();
+CREATE FUNCTION actual_test_employee_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Employee status is immutable in actual-data testing'; END $$;
+CREATE TRIGGER actual_test_employee_immutable BEFORE UPDATE OR DELETE ON employee FOR EACH ROW EXECUTE FUNCTION actual_test_employee_immutable();
+CREATE FUNCTION actual_test_roster_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(7219310); IF (SELECT count(*) FROM employee)>=2 THEN RAISE EXCEPTION 'Two-person test only'; END IF; IF NEW.role='admin' AND EXISTS(SELECT FROM employee WHERE role='admin') THEN RAISE EXCEPTION 'One owner only'; END IF; RETURN NEW; END $$;
+CREATE TRIGGER actual_test_roster_guard BEFORE INSERT ON employee FOR EACH ROW EXECUTE FUNCTION actual_test_roster_guard();
+ALTER TABLE payroll_run ADD CONSTRAINT actual_draft_run CHECK(state='draft' AND cpf_payment IS NULL AND acknowledgement IS NULL);
+ALTER TABLE payroll_entry ADD CONSTRAINT actual_draft_snapshot CHECK(snapshot @> '{"purpose":"ACTUAL-DATA DRAFT — NOT A PAYSLIP","actualDraftOnly":true,"syntheticOnly":false,"issuance":false,"payment":false,"mail":false}'::jsonb);
+ALTER TABLE payroll_profile ADD CONSTRAINT actual_draft_profile CHECK(input @> '{"actualDraftOnly":true}'::jsonb AND NOT input ? 'syntheticOnly');
+ALTER ROLE hr_actual_test_app SET default_transaction_read_only=off;
+COMMIT;
+`;
+sql=sql.replace('COMMIT;\n',()=>readFileSync('ops/deploy/actual-source-schema.sql','utf8')+'\n'+readFileSync('db/migrations/0021-current-employee-profile.sql','utf8')+'\nGRANT SELECT,INSERT ON employee_profile_revision,employee_balance_change,employee_profile_command TO hr_actual_test_app;GRANT SELECT ON employee_profile_schema TO hr_actual_test_app;\nCOMMIT;\n');sql=sql.replace('COMMIT;\n',()=>readFileSync('db/migrations/0022-saved-payroll.sql','utf8')+'\n'+readFileSync('ops/deploy/actual-monthly-schema.sql','utf8')+'\nCOMMIT;\n');process.stdout.write(sql);

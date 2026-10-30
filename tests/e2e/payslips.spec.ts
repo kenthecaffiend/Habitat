@@ -1,0 +1,30 @@
+import {test,expect} from '@playwright/test';
+import {randomUUID} from 'node:crypto';
+import {localApp} from '../helpers/local-app';
+import {createPayrollService} from '../../src/modules/payroll/service';
+import {createLeaveService} from '../../src/modules/leave/service';
+import {createPayslipService} from '../../src/modules/payslips/service';
+test('synthetic payslip library distinguishes simulated acceptance from actual issue',async({page})=>{
+ const app=await localApp('test');try{
+ const a=(await app.db.pool.query('SELECT id,user_id,role FROM employee')).rows[0],actor={employeeId:a.id,userId:a.user_id,role:a.role},ctx=()=>({actor,requestId:randomUUID()});
+ await createLeaveService(app.db.pool).configureProfile(ctx(),{employeeId:a.id,continuing:true,eligibleSince:'2025-01-01',verifiedEvidence:'Synthetic fixture',workingWeekdays:[1,2,3,4,5],restDay:0});
+ const p=createPayrollService(app.db.pool),d=createPayslipService(app.db.pool);await p.configureProfile(ctx(),{employeeId:a.id,effectiveMonth:'2026-10',syntheticOnly:true,dob:'1990-01-13',citizenship:'citizen',monthlySalaryCents:400000,openingAnnualOwSubjectCents:0,projectedAnnualOwSubjectCents:4800000,priorAnnualAwSubjectCents:0,funds:{status:'verified-none',evidenceId:'Synthetic fixture'}});await d.configure(ctx(),a.id,true);
+ const draft=await p.createDraft(ctx(),'2026-10');if(!draft.ok)throw Error(draft.code);await p.approvePayroll(ctx(),draft.value,1,{remainingPeriodAcknowledgement:'Synthetic period reviewed'});const rows:any=await p.list(actor);await p.recordSalaryPayment(ctx(),rows.value[0].entries[0].id,{date:'2026-10-23',reference:'SIM-LIBRARY',amountCents:320000});
+ await page.goto(app.origin+'/login');await page.getByLabel('Email').fill(app.email);await page.getByLabel('Password').fill(app.password);await page.getByRole('button',{name:'Sign in'}).click();await expect(page.getByRole('heading',{name:'Your HR'})).toBeVisible();
+ await page.goto(app.origin+'/employee/payslips');await expect(page.getByRole('heading',{name:'Synthetic payslip previews'})).toBeVisible();await expect(page.getByText('Actual issued: no. Actual delivered: no.')).toBeVisible();await expect(page.getByText('Delivery: planned',{exact:true})).toBeVisible();
+ await page.goto(app.origin+'/admin/payslips');await page.getByRole('button',{name:'Run one fake delivery step'}).click();await expect(page.getByText('Delivery: simulated_accepted',{exact:true})).toBeVisible();await expect(page.getByText('Actual issued: no. Actual delivered: no.')).toBeVisible();await expect(page.getByText('Manual issuance still required',{exact:true})).toBeVisible();await page.getByRole('link',{name:'View synthetic JSON preview'}).click();await expect(page.getByText(/SIMULATED JSON ONLY/)).toBeVisible();
+ }finally{await app.stop();}
+});
+test('library filters salary periods without hiding original and follow-up payment snapshots',async({page})=>{
+ const app=await localApp('test');try{
+ const a=(await app.db.pool.query('SELECT id,user_id,role FROM employee')).rows[0],actor={employeeId:a.id,userId:a.user_id,role:a.role},ctx=()=>({actor,requestId:randomUUID()});const p=createPayrollService(app.db.pool);
+ await createLeaveService(app.db.pool).configureProfile(ctx(),{employeeId:a.id,continuing:true,eligibleSince:'2025-01-01',verifiedEvidence:'Synthetic fixture',workingWeekdays:[1,2,3,4,5],restDay:0});
+ await p.configureProfile(ctx(),{employeeId:a.id,effectiveMonth:'2026-09',syntheticOnly:true,dob:'1990-01-13',citizenship:'citizen',monthlySalaryCents:400000,openingAnnualOwSubjectCents:0,projectedAnnualOwSubjectCents:4800000,priorAnnualAwSubjectCents:0,funds:{status:'verified-none',evidenceId:'Synthetic fixture'}});
+ for(const month of ['2026-09','2026-10']){const d=await p.createDraft(ctx(),month);if(!d.ok)throw Error(d.code);await p.approvePayroll(ctx(),d.value,1,{remainingPeriodAcknowledgement:'Synthetic review'});const r=await p.list(actor);if(!r.ok)throw Error(r.code);const entry=r.value.find(x=>x.id===d.value)!.entries[0];for(const [ref,amount] of [['first',100000],['balance',220000]] as const){const result=await p.recordPaymentException(ctx(),entry.id,{payment:{date:'2026-10-23',reference:month+ref,amountCents:amount},wageCents:amount,reimbursementCents:0,reason:'Synthetic partial'});expect(result.ok).toBe(true);}}
+ const before=(await app.db.pool.query('SELECT id,snapshot_hash FROM payslip_obligation ORDER BY id')).rows;
+ await page.goto(app.origin+'/login');await page.getByLabel('Email').fill(app.email);await page.getByLabel('Password').fill(app.password);await page.getByRole('button',{name:'Sign in'}).click();await expect(page.getByRole('heading',{name:'Your HR'})).toBeVisible();await page.goto(app.origin+'/employee/payslips');
+ await expect(page.getByRole('article')).toHaveCount(4);await page.getByRole('combobox',{name:'Salary year',exact:true}).selectOption('2026');await page.getByRole('combobox',{name:'Salary month',exact:true}).selectOption('09');await expect(page.getByRole('article')).toHaveCount(2);await expect(page.getByText('Original recorded snapshot',{exact:true})).toBeVisible();await expect(page.getByText('Follow-up payment snapshot — earlier versions remain unchanged',{exact:true})).toBeVisible();await expect(page.getByRole('article').first()).toContainText('2026-09');
+ await page.getByRole('combobox',{name:'Salary month',exact:true}).selectOption('01');await expect(page.getByText('No previews match this salary period.')).toBeVisible();await page.getByRole('button',{name:'Clear period filters'}).click();await expect(page.getByRole('article')).toHaveCount(4);expect((await app.db.pool.query('SELECT id,snapshot_hash FROM payslip_obligation ORDER BY id')).rows).toEqual(before);
+ await page.goto(app.origin+'/admin/payslips');await page.getByRole('combobox',{name:'Salary month',exact:true}).selectOption('10');await expect(page.getByRole('article')).toHaveCount(2);await expect(page.getByText('Actual issued: no. Actual delivered: no.')).toHaveCount(2);
+ }finally{await app.stop();}
+});

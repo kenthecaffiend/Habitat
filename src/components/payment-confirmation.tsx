@@ -1,0 +1,6 @@
+'use client';
+import {DateInput} from './date-input';
+export function PaymentConfirmation({date,revision,period,approved,enabled,busy,onSave}:{date:string|null;revision:number;period:string;approved:boolean;enabled:boolean;busy:boolean;onSave:(input:{date:string|null;revision:number})=>void}){
+ const canRecord=approved&&enabled;
+ return <details className="payment-recording"><summary>Record payment</summary>{!approved&&<p>Finalise this payroll draft before recording payment.</p>}{!enabled&&<p>Payment recording needs to be enabled for this workspace. Your draft remains unchanged.</p>}<form className="workflow-form" onSubmit={e=>{e.preventDefault();if(!canRecord||busy)return;const f=new FormData(e.currentTarget);onSave({date:String(f.get('date')??'')||null,revision});}}><fieldset className="payment-confirmation" disabled={busy||!canRecord}><legend>Record payment</legend><label>Actual payment date<DateInput name="date" defaultValue={date??''} min={period+'-01'} max={new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'})}/></label><p>{date?'Paid on '+date:'No payment recorded'}</p><p>Saving the date marks the approved totals paid. Clearing the date marks them unpaid. Earlier payslips remain unchanged.</p><button type="submit">Save payment date</button></fieldset></form></details>;
+}

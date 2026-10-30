@@ -1,0 +1,8 @@
+CREATE TABLE payroll_profile(employee_id uuid REFERENCES employee(id),effective_month text NOT NULL,input jsonb NOT NULL,PRIMARY KEY(employee_id,effective_month));
+CREATE TABLE payroll_run(id uuid PRIMARY KEY,month text UNIQUE NOT NULL,state text NOT NULL CHECK(state IN ('draft','approved','void')),revision integer NOT NULL DEFAULT 1,cutoff timestamptz NOT NULL DEFAULT clock_timestamp(),capture jsonb NOT NULL,roster jsonb NOT NULL,acknowledgement text,cpf_payment jsonb);
+CREATE TABLE payroll_entry(id uuid PRIMARY KEY,run_id uuid NOT NULL REFERENCES payroll_run(id),employee_id uuid NOT NULL REFERENCES employee(id),snapshot jsonb NOT NULL,exception_mode boolean NOT NULL DEFAULT false,UNIQUE(run_id,employee_id));
+CREATE TABLE payroll_claim(claim_id uuid PRIMARY KEY REFERENCES claim(id),entry_id uuid NOT NULL REFERENCES payroll_entry(id),paid boolean NOT NULL DEFAULT false);
+CREATE TABLE payroll_payment(id uuid PRIMARY KEY,entry_id uuid NOT NULL REFERENCES payroll_entry(id),input jsonb NOT NULL,wage_cents bigint NOT NULL CHECK(wage_cents>=0),reimbursement_cents bigint NOT NULL CHECK(reimbursement_cents>=0),issue_due_at text NOT NULL,exception boolean NOT NULL,UNIQUE(entry_id,id));
+CREATE UNIQUE INDEX payroll_normal_payment ON payroll_payment(entry_id) WHERE NOT exception;
+CREATE TABLE payroll_intent(actor_id text REFERENCES "user"(id),request_key text NOT NULL,fingerprint text NOT NULL,result jsonb NOT NULL,PRIMARY KEY(actor_id,request_key));
+CREATE TABLE payroll_correction(id uuid PRIMARY KEY,entry_id uuid NOT NULL REFERENCES payroll_entry(id),input jsonb NOT NULL,reconciliation jsonb NOT NULL,status text NOT NULL CHECK(status='external_reconciliation_required'));

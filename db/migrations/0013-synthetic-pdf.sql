@@ -1,0 +1,3 @@
+CREATE TABLE payslip_pdf(obligation_id uuid PRIMARY KEY REFERENCES payslip_obligation(id),source_hash text NOT NULL,version integer NOT NULL,template_id text NOT NULL,renderer_id text NOT NULL,font_hash text NOT NULL,sha256 text NOT NULL,body_base64 text NOT NULL CHECK(length(body_base64)<=349528));
+CREATE TRIGGER immutable_pdf BEFORE UPDATE OR DELETE ON payslip_pdf FOR EACH ROW EXECUTE FUNCTION protect_simulated_document();
+CREATE TABLE payslip_pdf_attempt(obligation_id uuid PRIMARY KEY REFERENCES payslip_obligation(id),state text NOT NULL CHECK(state IN ('processing','held','rejected','ready','quarantined')),reason text);

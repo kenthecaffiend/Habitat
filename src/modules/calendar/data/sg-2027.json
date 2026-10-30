@@ -1,0 +1,25 @@
+{
+  "year": 2027,
+  "source": "https://www.mom.gov.sg/employment-practices/public-holidays",
+  "checkedAt": "2026-10-23",
+  "publicHolidays": [
+    "2027-01-01",
+    "2027-02-06",
+    "2027-02-07",
+    "2027-03-10",
+    "2027-03-26",
+    "2027-05-01",
+    "2027-05-17",
+    "2027-05-20",
+    "2027-08-09",
+    "2027-10-28",
+    "2027-12-25"
+  ],
+  "sundayRestObservances": [
+    {
+      "holiday": "2027-02-07",
+      "observed": "2027-02-08"
+    }
+  ],
+  "note": "Observed dates require Sunday to be the employee rest day. Saturday non-working-day compensation/substitution is a separate policy review; no Monday is automatically added."
+}

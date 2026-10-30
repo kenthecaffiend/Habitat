@@ -1,0 +1,4 @@
+import {it,expect} from 'vitest';
+import {payslipDownloadName} from '../../src/modules/payslips/download-name';
+it('uses preferred first name and payroll period rather than payment month',()=>{expect(payslipDownloadName('Fictional Person','2026-10')).toBe('Fictional-2026-Oct-Payslip.pdf');expect(payslipDownloadName('Example Colleague','2056-02')).toBe('Example-2056-Feb-Payslip.pdf');});
+it('bounds and sanitizes header filenames',()=>{expect(payslipDownloadName('  Élodie Smith  ','2026-12')).toBe('Elodie-2026-Dec-Payslip.pdf');for(const name of ['../bad\\name','\r\n"; filename=evil','😀','a'.repeat(100)])expect(payslipDownloadName(name,'2026-01')).toMatch(/^[A-Za-z0-9-]{1,48}-2026-Jan-Payslip\.pdf$/);expect(payslipDownloadName('','2026-01')).toBe('Employee-2026-Jan-Payslip.pdf');expect(()=>payslipDownloadName('A','2026-13')).toThrow();});

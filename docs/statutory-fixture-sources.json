@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-10-23",
+  "purpose": "independently sourced literal synthetic fixtures; not official calculator execution",
+  "officialCalculatorExecuted": false,
+  "fixtures": [
+    {"tests":"tests/unit/statutory-fixtures.test.ts", "ruleId":"sg-citizen-2026-v1", "effectiveFrom":"2026-01-01", "effectiveTo":"2026-12-31", "source":"https://www.cpf.gov.sg/content/dam/web/employer/employer-obligations/documents/CPFcontributionratesfrom1Jan2026.pdf"},
+    {"tests":"tests/unit/statutory-fixtures.test.ts", "ruleId":"sg-citizen-under55-2027-v1", "effectiveFrom":"2027-01-01", "effectiveTo":"2027-12-31", "source":"https://www.cpf.gov.sg/content/dam/web/employer/employer-obligations/documents/jan2027cpfcontributionrates.pdf"},
+    {"tests":"tests/unit/annual-cpf.test.ts", "period":"2026", "source":"https://www.cpf.gov.sg/service/sfc/servlet.shepherd/document/download/069IW00000KUuZCYA1", "note":"Expected values independently sum monthly rows; inconsistent extracted total row not used."},
+    {"tests":"tests/unit/statutory-fixtures.test.ts", "effectiveFrom":"2008-10-01", "source":"https://www.cpf.gov.sg/employer/employer-obligations/skills-development-levy", "supportingSource":"https://file.go.gov.sg/sdl-generic-faq.pdf", "note":"Fractional-cent employee SDL convention remains blocked for acceptance; official calculator returned 403 to independent researcher."},
+    {"tests":"tests/unit/funds.test.ts", "ruleId":"sg-shg-2026-reviewed-2026-10-23", "reviewWindow":"2026 only", "source":"https://www.cpf.gov.sg/employer/employer-obligations/contributions-to-self-help-groups", "commencement":{"CDAC":"2015-01-01","ECF":"2015-01-01","SINDA":"2015-01-01","MBMF":"2016-06-01"}, "commencementSource":"https://www.mccy.gov.sg/about-us/news-and-resources/government-increases-matching-grant-for-self-help-groups/"},
+    {"tests":"tests/unit/funds.test.ts", "source":"https://www.cdac.org.sg/cdac-funding-info-information-for-employers", "note":"CDAC submission evidence, not nonexistent acknowledgement; employer scoped."},
+    {"tests":"tests/unit/funds.test.ts", "source":"https://www.sinda.org.sg/donate/sindafundcontribution/", "note":"Processed digital notification; employer scoped; digital-only from 2025-10-27."},
+    {"tests":"tests/unit/funds.test.ts", "source":"https://www.eurasians.sg/ecf-contribution", "note":"Certified opt-out, no arbitrary reduction; unresolved <=200 wage threshold blocked."},
+    {"tests":"tests/unit/funds.test.ts", "source":"https://www.muis.gov.sg/give-back/mbmf/employer-information/", "note":"Full-fund MUIS certificate only; partial variation blocked. At exactly 1000 follow CPF inclusive boundary; MUIS rendered symbol discrepancy retained."},
+    {"tests":"tests/unit/payslip-data.test.ts", "source":"https://www.mom.gov.sg/employment-practices/salary/itemised-payslips", "note":"Applicable mandatory fields separate from optional YTD/employer costs. Data preview never constitutes issuance."},
+    {"tests":"tests/unit/payslip-data.test.ts", "source":"https://www.cpf.gov.sg/service/article/are-retrospective-salary-increments-classified-as-ordinary-wages-ow-or-additional-wages-aw", "note":"Already-due omission OW; newly decided retrospective increment AW; same-year supported attribution only."},
+    {"tests":"tests/unit/acceptance-pack.test.ts", "source":"https://www.cpf.gov.sg/employer/employer-obligations/declaring-accurate-wage-information", "note":"Actual uncapped OW/AW distinct from CPF bases and payment deltas."}
+  ]
+}

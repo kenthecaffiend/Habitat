@@ -1,0 +1,2 @@
+import{formatSGD}from'../claims/amount';
+export function draftInputs(runs:any[],month:string,lockDrafts:boolean,selected:string[],wages:Record<string,string>){const existing=runs.find(r=>r.month===month&&r.state!=='void'),locked=lockDrafts&&!!existing;return{existing,locked,selected:locked?existing.entries.map((e:any)=>e.employee_id):selected,wages:locked?Object.fromEntries(existing.entries.map((e:any)=>[e.employee_id,formatSGD(e.snapshot.input.bonusCents)])):wages};}

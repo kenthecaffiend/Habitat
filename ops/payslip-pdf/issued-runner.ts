@@ -1,0 +1,3 @@
+import {pdfContainer} from './runner';import {issuedLayoutAllowed} from '../deploy/worker-policy.mjs';import {PreviewRejected} from '../documents/outcomes';
+export const ISSUED_IMAGE='sha256:49c702fde0b061403cf574c4d1c45fb03f42ed564765cc5ff4559293d9f452ed';
+export function renderIssuedPdf(layout:unknown){if(!issuedLayoutAllowed(layout))throw new PreviewRejected('input','Bounded issued layout required');const input=Buffer.from(JSON.stringify(layout));if(input.length>131072)throw new PreviewRejected('input','Layout bound');const bytes=pdfContainer(null,input,10000,ISSUED_IMAGE);if(bytes.length>262144||bytes.subarray(0,5).toString()!=='%PDF-')throw Error('Renderer output');return bytes;}

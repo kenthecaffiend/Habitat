@@ -1,0 +1,22 @@
+import {readFileSync} from 'node:fs';import http from 'node:http';import {spawn} from 'node:child_process';import {previewConfig,ownerAllowed,previewRoute} from './policy.mjs';
+import {actualDraftConfig,actualDraftRoute} from './actual-policy.mjs';
+const actual=process.env.HR_ACTUAL_DATA_TEST==='enabled',c=(actual?actualDraftConfig:previewConfig)(JSON.parse(readFileSync('/run/hr/config.json','utf8')));
+const child=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3001'],{stdio:['ignore','inherit','inherit'],env:{...process.env,NODE_ENV:'production',...(actual?{HR_ACTUAL_DATA_TEST:'enabled'}:{HR_SYNTHETIC_PREVIEW:'enabled'})}});child.on('exit',()=>process.exit(1));
+let receiptBusy=false;
+const server=http.createServer({maxHeaderSize:16384},async(req,res)=>{
+ res.setHeader('Cache-Control','private, no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+ if(req.url==='/healthz'&&req.method==='GET'&&req.headers.host==='127.0.0.1:3000'&&['127.0.0.1','::1'].includes(req.socket.remoteAddress)){
+  const q=http.get('http://127.0.0.1:3001/api/internal/'+(actual?'actual-test-contract':'preview-contract'),r=>{r.resume();res.writeHead(r.statusCode===200?200:503);res.end(r.statusCode===200?(actual?'actual-draft-ready':'synthetic-preview-ready'):'not-ready');});q.setTimeout(5000,()=>q.destroy(Error('TIMEOUT')));q.on('error',()=>{res.writeHead(503);res.end('not-ready');});return;
+ }
+ if(!ownerAllowed(req.headers,c)){res.writeHead(403);res.end('Private owner access required');return;}
+ const path=(actual?actualDraftRoute:previewRoute)(req.method,req.url??'',actual&&c.workflows?.enabled===true,actual&&c.bookkeeping?.enabled===true,actual&&c.selfServicePassword===true);if(!path){res.writeHead(503);res.end(actual?'Actual-data testing allows only owner employee records and draft comparisons. No approvals, payments, issuance, imports, files or email.':'This synthetic preview permits configured private PNG/JPEG receipts and branding only. Imports, PDF processing and delivery remain locked.');return;}
+ if(req.method==='POST'&&req.headers.origin!==c.origin){res.writeHead(403);res.end('Exact private origin required');return;}
+ const receiptUpload=req.method==='POST'&&path==='/api/files';if(receiptUpload){if(receiptBusy){res.writeHead(429,{'Connection':'close'});res.end('Another receipt upload is active. Retry the same file.');return;}receiptBusy=true;let released=false;const release=()=>{if(!released){released=true;receiptBusy=false;}};res.once('finish',release);res.once('close',release);}
+ let body;try{if(req.method==='POST'){let size=0;const chunks=[];if(req.headers['content-encoding']&&req.headers['content-encoding']!=='identity')throw Error();for await(const b of req){size+=b.length;if(size>(receiptUpload?20971520:path==='/api/leave/files'?5242880:path.startsWith('/api/branding/logo?')?1048576:65536))throw Error();chunks.push(b);}body=Buffer.concat(chunks);}}catch{res.writeHead(413);res.end('Unsupported request body');return;}
+ const headers={host:new URL(c.origin).host};for(const name of ['cookie','content-type','idempotency-key','x-branding-revision','x-hr-synthetic','x-attachment-purpose','origin','accept','rsc','next-router-state-tree','next-router-prefetch','next-url'])if(req.headers[name])headers[name]=req.headers[name];if(body)headers['content-length']=String(body.length);
+ const q=http.request({host:'127.0.0.1',port:3001,path,method:req.method,headers},r=>{
+  const location=r.headers.location;if(location&&!location.startsWith('/')&&!location.startsWith(c.origin+'/')){r.resume();res.writeHead(502);res.end('Unsupported redirect');return;}
+  res.statusCode=r.statusCode??502;for(const name of ['content-type','content-disposition','content-security-policy','x-content-type-options','set-cookie','location','vary'])if(r.headers[name])res.setHeader(name,r.headers[name]);r.pipe(res);
+ });q.setTimeout(15000,()=>q.destroy(Error('TIMEOUT')));q.on('error',()=>{if(!res.headersSent)res.writeHead(503);res.end('Preview temporarily unavailable');});q.end(body);
+});
+server.maxConnections=32;server.requestTimeout=10000;server.headersTimeout=10000;server.listen(3000,'0.0.0.0');process.on('SIGTERM',()=>{server.close();child.kill('SIGTERM');setTimeout(()=>process.exit(0),1000).unref();});

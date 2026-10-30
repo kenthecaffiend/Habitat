@@ -1,0 +1,2 @@
+import {it,expect} from 'vitest';import {newHireAnnualBalance} from '../../src/modules/leave/starting-balances';
+it('suggests the14-day company allowance by completed months, with zero carryover and whole-day rounding',()=>{expect(newHireAnnualBalance('2026-01-01',2026)).toEqual({currentDays:14,carryoverDays:0});expect(newHireAnnualBalance('2026-03-14',2026)).toEqual({currentDays:11,carryoverDays:0});expect(newHireAnnualBalance('2026-12-15',2026)).toEqual({currentDays:0,carryoverDays:0});expect(newHireAnnualBalance('',2026)).toBeNull();});

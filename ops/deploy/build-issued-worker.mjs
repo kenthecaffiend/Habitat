@@ -1,0 +1,1 @@
+import {build} from 'esbuild';await build({entryPoints:['ops/deploy/issued-runner-entry.ts'],outfile:'ops/deploy/dist/issued-runner.mjs',bundle:true,platform:'node',format:'esm',target:'node24',logLevel:'error'});

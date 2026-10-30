@@ -1,0 +1,1 @@
+export function statusLabel(value:string){return({draft:'Draft',approved:'Approved',pending:'Awaiting review',rejected:'Rejected',withdrawn:'Withdrawn',allocated:'Included in payroll',cancelled:'Cancelled',canceled:'Cancelled',paid:'Paid',void:'Discarded',processing:'Processing',held:'Needs review',ready:'Ready'} as Record<string,string>)[value]??'Needs review';}

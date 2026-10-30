@@ -1,0 +1,19 @@
+import {describe,it,expect} from 'vitest';
+import {allocateLeave} from '../../src/modules/leave/ledger';
+const slot=(date:string,part='am')=>({date,part});
+const req=(id:string,date:string,kind='annual',part='am')=>({id,kind,state:'pending',slots:[slot(date,part)]});
+const bucket=(year:number,units=28)=>({year,units});
+const run=(requests:any[],buckets=[bucket(2026)],today='2026-10-23',history:any[]=[])=>allocateLeave({requests,buckets,today,history});
+describe('leave ledger policy',()=>{
+ it('reserves one half day and returns 27 from 28',()=>{expect(run([req('a','2026-10-26')])).toMatchObject({ok:true,value:{remaining:{2026:27},allocations:[{requestId:'a',date:'2026-10-26',part:'am',year:2026}]}});});
+ it('AM and PM coexist, cross-type same half overlaps',()=>{expect(run([req('a','2026-10-26'),req('b','2026-10-26','sick','pm')]).ok).toBe(true);expect(run([req('a','2026-10-26'),req('b','2026-10-26','unpaid')])).toMatchObject({ok:false,code:'LEAVE_OVERLAP'});});
+ it('sorts dates before submission order and uses oldest eligible bucket',()=>{const r=run([req('z','2027-01-05'),req('a','2027-01-04')],[bucket(2026,1),bucket(2027)]);expect(r).toMatchObject({ok:true,value:{allocations:[{requestId:'a',year:2026},{requestId:'z',year:2027}]}});});
+ it('expires carry after the following year and never spends future grants early',()=>{expect(run([req('a','2028-01-03')],[bucket(2026)])).toMatchObject({ok:false,code:'LEAVE_BALANCE'});expect(run([req('a','2026-12-31')],[bucket(2027)])).toMatchObject({ok:false,code:'LEAVE_BALANCE'});expect(run([req('a','2027-12-31')])).toMatchObject({ok:true});});
+ it('rejected and cancelled future requests release reservations',()=>{expect(run([{...req('a','2026-10-26'),state:'cancelled'},{...req('b','2026-10-27'),state:'rejected'}])).toMatchObject({ok:true,value:{remaining:{2026:28},allocations:[]}});});
+ it('preserves consumed historical allocation when future reservation order changes',()=>{expect(run([req('a','2027-01-05')],[bucket(2026,1),bucket(2027)],'2027-01-04',[{requestId:'old',date:'2026-12-31',part:'am',year:2026}])).toMatchObject({ok:true,value:{remaining:{2026:0,2027:27},allocations:[{requestId:'old',year:2026},{requestId:'a',year:2027}]}});});
+ it('blocks annual overdraw',()=>expect(run([req('a','2026-10-26'),req('b','2026-10-27')],[bucket(2026,1)])).toMatchObject({ok:false,code:'LEAVE_BALANCE'}));
+ it('14 outpatient days leave only 46 hospital days',()=>{const slots=Array.from({length:28},(_,i)=>slot('2026-06-'+String(1+Math.floor(i/2)).padStart(2,'0'),i%2?'pm':'am'));const hospital=Array.from({length:93},(_,i)=>slot(new Date(Date.UTC(2026,6,1+Math.floor(i/2))).toISOString().slice(0,10),i%2?'pm':'am'));expect(run([{id:'s',kind:'sick',state:'approved',slots},{id:'h',kind:'hospitalisation',state:'pending',slots:hospital.slice(0,92)}]).ok).toBe(true);expect(run([{id:'s',kind:'sick',state:'approved',slots},{id:'h',kind:'hospitalisation',state:'pending',slots:hospital}])).toMatchObject({ok:false,code:'MEDICAL_BALANCE'});});
+ it('13.5 outpatient and 46.5 hospital days use exactly 60 combined',()=>{const slots=Array.from({length:120},(_,i)=>slot(new Date(Date.UTC(2026,2,1+Math.floor(i/2))).toISOString().slice(0,10),i%2?'pm':'am'));expect(run([{id:'s',kind:'sick',state:'approved',slots:slots.slice(0,27)},{id:'h',kind:'hospitalisation',state:'approved',slots:slots.slice(27)}]).ok).toBe(true);});
+ it('paid exceptional leave consumes no annual allowance but reserves its slot',()=>{expect(run([req('e','2026-10-26','exceptional-paid')])).toMatchObject({ok:true,value:{remaining:{2026:28},allocations:[]}});expect(run([req('e','2026-10-26','exceptional-paid'),req('a','2026-10-26')])).toMatchObject({ok:false,code:'LEAVE_OVERLAP'});});
+ it('rejects corrupt negative grants and duplicate request IDs',()=>{expect(run([],[bucket(2026,-1)])).toMatchObject({ok:false});expect(run([req('a','2026-10-26'),req('a','2026-10-27')])).toMatchObject({ok:false});});
+});

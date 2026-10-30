@@ -1,0 +1,10 @@
+import type {Pool} from 'pg';import type {Actor} from '../core/contracts';import {createBrandingService,LOGO_INPUT_LIMIT} from '../modules/branding/service';
+export function createBrandingHttp(pool:Pool){const branding=createBrandingService(pool);return async(request:Request,actor:Actor)=>{const u=new URL(request.url),reply=(r:any)=>Response.json(r,{status:r.ok?200:r.code==='FORBIDDEN'?403:r.code==='NOT_FOUND'?404:400,headers:{'Cache-Control':'no-store'}});
+ if(request.method==='GET'&&u.pathname==='/api/branding')return reply(await branding.setting(actor));
+ if(request.method==='GET'&&u.pathname==='/api/branding/logo'){const r=await branding.image(actor,u.searchParams.get('variant')??'');return r.ok?new Response(new Uint8Array(r.value),{headers:{'Content-Type':'image/png','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}}):reply(r);}
+ if(request.method!=='POST'||!['/api/branding/logo','/api/branding/reset'].includes(u.pathname))return new Response(null,{status:405});
+ if(actor.role!=='admin')return reply({ok:false,code:'FORBIDDEN',message:'Administrator required'});
+ const key=request.headers.get('idempotency-key')??'',variant=u.searchParams.get('variant'),raw=request.headers.get('x-branding-revision');if(!raw||!/^\d{1,6}$/.test(raw))return reply({ok:false,code:'INPUT',message:'Valid branding revision required'});
+ let bytes:Buffer|null=null;if(u.pathname.endsWith('/logo')){if(request.headers.has('content-encoding')&&request.headers.get('content-encoding')!=='identity')return new Response(null,{status:415});const reader=request.body?.getReader();if(!reader)return new Response(null,{status:400});const chunks:Uint8Array[]=[];let size=0;try{while(true){const v=await reader.read();if(v.done)break;size+=v.value.length;if(size>LOGO_INPUT_LIMIT)return new Response(null,{status:413});chunks.push(v.value);}bytes=Buffer.concat(chunks);}finally{await reader.cancel();}}
+ return reply(await branding.change({actor,requestId:key},variant,Number(raw),bytes,bytes?request.headers.get('content-type')??'':''));
+};}

@@ -1,0 +1,14 @@
+import {z} from 'zod';
+const text=z.string().trim().min(1).max(200),month=z.string().regex(/^2026-(0[1-9]|1[0-2])$/),digest=z.string().regex(/^[a-f0-9]{64}$/);
+const amount=z.number().int().min(0).max(1000000000).nullable();
+export const components=['gross','ow','aw','owSubject','awSubject','deductions','employeeCpf','employerCpf','sdl','reimbursements','net'] as const;
+const values=z.object(Object.fromEntries(components.map(k=>[k,amount])) as Record<typeof components[number],typeof amount>).strict();
+const base={sourceId:text,version:text,employeeSourceId:text,documentHash:digest.nullable()};
+const payroll=z.object({...base,entity:z.literal('payroll'),month,contributionMonth:month,values,expected:values}).strict();
+const absence=z.object({...base,entity:z.literal('absence'),month,reason:text}).strict();
+const leave=z.object({...base,entity:z.literal('leave'),category:text,vintage:z.number().int().min(2025).max(2026),halfUnits:amount,expectedHalfUnits:amount}).strict();
+const future=z.object({...base,entity:z.literal('future_leave'),category:text,date:z.string().regex(/^2026-\d\d-\d\d$/),part:z.enum(['am','pm']),status:z.enum(['pending','approved'])}).strict();
+const claim=z.object({...base,entity:z.literal('claim'),month,description:text,amountCents:amount,paidCents:amount,outstandingCents:amount,expected:z.object({amountCents:amount,paidCents:amount,outstandingCents:amount}).strict()}).strict();
+export const bundleSchema=z.object({syntheticOnly:z.literal(true),sourceSystem:text,cutoverMonth:month,sourceWatermark:text,deltaChecksum:digest,inventories:z.array(z.object({employeeSourceId:text,leave:z.number().int().nonnegative().max(500),futureLeave:z.number().int().nonnegative().max(500),claims:z.number().int().nonnegative().max(500),evidenceHash:digest,absenceReason:text}).strict()).max(2).default([]),employees:z.array(z.object({sourceId:text,targetId:z.uuid(),name:text}).strict()).min(1).max(2),rows:z.array(z.discriminatedUnion('entity',[payroll,absence,leave,future,claim])).min(1).max(500)}).strict();
+export type ImportBundle=z.infer<typeof bundleSchema>;
+export const acceptanceSchema=z.object({checksum:digest,reportChecksum:digest,targetVersion:z.string(),sourceWatermark:text,deltaChecksum:digest,freezeAcknowledgement:z.string().trim().min(10).max(2000)}).strict();

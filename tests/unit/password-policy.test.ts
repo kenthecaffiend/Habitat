@@ -1,0 +1,3 @@
+import{it,expect}from'vitest';import{validatePasswordChange}from'../../src/app/employee/profile/change-password';
+it('allows any non-empty short password without character rules',()=>{expect(validatePasswordChange('current','a','a')).toBe('');expect(validatePasswordChange('current',' ',' ')).toBe('');});
+it('retains non-empty current/new, confirmation and size bounds',()=>{expect(validatePasswordChange('current','','')).not.toBe('');expect(validatePasswordChange('','a','a')).not.toBe('');expect(validatePasswordChange('current','a','b')).not.toBe('');expect(validatePasswordChange('current','a'.repeat(129),'a'.repeat(129))).not.toBe('');});

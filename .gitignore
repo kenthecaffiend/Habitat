@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.env*
+!.env.example
+.test-data/
+test-results/
+playwright-report/
+.superpowers/
+*.log
+
+*.tsbuildinfo
+ops/deploy/dist/

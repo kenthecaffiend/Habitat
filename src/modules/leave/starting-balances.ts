@@ -1,0 +1,3 @@
+import {parseDate} from '../calendar';
+/** Editable suggestion using the saved14-day company allowance, not an import or eligibility decision. */
+export function newHireAnnualBalance(employmentStart:string,year:number){try{const hire=parseDate(employmentStart);if(!Number.isInteger(year)||year<2026||year>2027||hire.getUTCFullYear()>year)return null;const start=hire.getUTCFullYear()<year?new Date(Date.UTC(year,0,1)):hire,end=new Date(Date.UTC(year+1,0,1));const months=Math.max(0,Math.min(12,(end.getUTCFullYear()-start.getUTCFullYear())*12+end.getUTCMonth()-start.getUTCMonth()-(end.getUTCDate()<start.getUTCDate()?1:0)));return{currentDays:Math.round(14*months/12),carryoverDays:0};}catch{return null;}}

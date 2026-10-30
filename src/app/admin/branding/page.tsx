@@ -1,0 +1,3 @@
+import {headers} from 'next/headers';import {redirect} from 'next/navigation';import {getApplication} from '../../../server/runtime';import BrandingPanel from './panel';
+export const dynamic='force-dynamic';
+export default async function Branding(){const app=await getApplication(),h=await headers(),r=await app.handle(new Request('http://localhost/api/employee',{headers:h}));if(r.status===401)redirect('/login');if(!r.ok||(await r.json()).role!=='admin')return <h1>Administrator access required</h1>;return <main><span className="hero-eyebrow">YOUR WORKSPACE</span><h1>Branding</h1><BrandingPanel/></main>;}

@@ -1,0 +1,43 @@
+import {beforeEach,it,expect,vi} from 'vitest';
+import React from 'react';
+const hooks=vi.hoisted(()=>({values:[] as unknown[],cursor:0}));
+vi.mock('react',async()=>{const real=await vi.importActual<typeof import('react')>('react');return {...real,useState:(initial:unknown)=>{const i=hooks.cursor++;if(!(i in hooks.values))hooks.values[i]=initial;return [hooks.values[i],(next:unknown)=>{hooks.values[i]=typeof next==='function'?(next as Function)(hooks.values[i]):next;}];},useRef:(initial:unknown)=>{const i=hooks.cursor++;if(!(i in hooks.values))hooks.values[i]={current:initial};return hooks.values[i];},useEffect:()=>{},useLayoutEffect:()=>{},useId:()=> 'fictional-upload'};});
+vi.mock('next/navigation',()=>({usePathname:()=>'/employee',useRouter:()=>({refresh:()=>{}})}));
+vi.mock('../../src/components/runtime-mode',()=>({ActualDraftContext:React.createContext(false),useActualDraftMode:()=>false}));
+import AppShell from '../../src/components/app-shell';
+import OwnProfile from '../../src/app/employee/profile/profile-panel';
+import {FilePicker} from '../../src/components/file-picker';
+import LeaveForm from '../../src/app/employee/leave/leave-form';
+type El={type:unknown;props:Record<string,any>};
+function elements(tree:any):El[]{if(Array.isArray(tree))return tree.flatMap(elements);if(!tree||typeof tree!=='object')return [];return [tree,...elements(tree.props?.children)];}
+function render(fn:()=>any){hooks.cursor=0;return elements(fn());}
+function textOf(value:any):string{return Array.isArray(value)?value.map(textOf).join(''):typeof value==='string'?value:value?.props?textOf(value.props.children):'';}
+function byText(nodes:El[],text:string){return nodes.find(n=>['button'].includes(String(n.type))&&textOf(n)===text)!;}
+const settle=()=>new Promise(resolve=>setTimeout(resolve,0));
+beforeEach(()=>{hooks.values=[];hooks.cursor=0;vi.unstubAllGlobals();});
+it.each(['http','network'])('keeps sign-out failure visible and permits explicit retry after %s failure',async(mode)=>{
+ const assigned:string[]=[];let resolve!:(r:unknown)=>void;let calls=0;vi.stubGlobal('location',{assign:(url:string)=>assigned.push(url)});vi.stubGlobal('fetch',()=>{calls++;return calls===1?new Promise(r=>{resolve=r;}):Promise.resolve({ok:true});});
+ const view=()=>AppShell({children:null});let nodes=render(view);byText(nodes,'Sign out').props.onClick();nodes=render(view);expect(nodes.find(n=>n.type==='button'&&n.props.className==='sign-out')?.props.disabled).toBe(true);
+ resolve(mode==='http'?{ok:false}:Promise.reject(new Error('fictional connection failure')));await settle();nodes=render(view);expect(assigned).toEqual([]);expect(nodes.some(n=>n.props.role==='alert'&&elements(n).some(e=>String(e.props.children).includes('try again')))).toBe(true);byText(nodes,'Retry sign out').props.onClick();await settle();expect(assigned).toEqual(['/login']);
+});
+it('refreshes conflicting own-profile context while retaining typed address for an explicit retry',async()=>{
+ const initial={name:'Fictional Person',displayName:'Example',email:'person@example.invalid',revision:1,personal:{'Residential address':'Old example','Postal code':'111111'},employment:{Position:'Fictional role'}};const requests:{url:string;body:any}[]=[];
+ vi.stubGlobal('fetch',async(url:string,options?:RequestInit)=>{requests.push({url,body:options?.body?JSON.parse(String(options.body)):null});return {ok:true,status:requests.length===1?409:200,json:async()=>requests.length===1?{ok:false,code:'REVISION_CONFLICT',message:'changed'}:requests.length===2?{ok:true,value:{...initial,revision:2,personal:{'Residential address':'Latest saved example','Postal code':'333333'},employment:{Position:'Updated fictional role'}}}:{ok:true,value:{revision:3}}};});
+ const view=()=>OwnProfile({initial});let nodes=render(view);byText(nodes,'Edit address').props.onClick();nodes=render(view);nodes.find(n=>n.props.id==='own-address')!.props.onChange({target:{value:'Typed example'}});nodes.find(n=>n.props.id==='own-postal-code')!.props.onChange({target:{value:'222222'}});nodes=render(view);nodes.find(n=>n.type==='form')!.props.onSubmit({preventDefault(){}});await settle();nodes=render(view);
+ expect(requests.map(r=>r.url)).toEqual(['/api/employees/me/address','/api/employees/me']);expect(nodes.find(n=>n.props.id==='own-address')!.props.value).toBe('Typed example');expect(nodes.some(n=>n.props.children==='Updated fictional role')).toBe(true);expect(textOf(nodes)).toContain('Latest saved example');expect(textOf(nodes)).toContain('333333');expect(requests).toHaveLength(2);byText(nodes,'Retry save').props.onClick?.();if(requests.length===2)nodes.find(n=>n.type==='form')!.props.onSubmit({preventDefault(){}});await settle();expect(requests[2].body).toEqual({revision:2,address:'Typed example',postalCode:'222222'});
+});
+it('gives upload buttons contextual accessible names and announces selected filenames',()=>{
+ const view=()=>FilePicker({label:'Medical attachment (optional)',accept:'.pdf',formats:'PDF'});let nodes=render(view);expect(byText(nodes,'Click to upload file').props['aria-label']).toContain('Medical attachment');nodes.find(n=>n.type==='input')!.props.onChange({target:{files:[{name:'fictional-note.pdf'}]}});nodes=render(view);expect(nodes.find(n=>n.props.role==='status')?.props.children).toBe('fictional-note.pdf');
+});
+it('keeps a single-day half-day selection consistent and labels its period clearly',()=>{
+ const view=()=>LeaveForm({employeeId:'fictional',admin:false,initial:{ok:true,value:{requests:[],remaining:{}}}});let nodes=render(view);const dates=()=>nodes.filter(n=>n.props.required&&typeof n.props.onChange==='function');dates()[0].props.onChange({target:{value:'2026-10-28'}});nodes=render(view);dates()[1].props.onChange({target:{value:'2026-10-28'}});nodes=render(view);let parts=nodes.filter(n=>n.type==='select').slice(1);parts[0].props.onChange({target:{value:'pm'}});nodes=render(view);parts=nodes.filter(n=>n.type==='select').slice(1);expect(parts.map(n=>n.props.value)).toEqual(['pm','pm']);expect(nodes.filter(n=>n.type==='label').some(n=>String(n.props.children[0]).includes('day period'))).toBe(true);
+ parts[1].props.onChange({target:{value:'am'}});nodes=render(view);expect(nodes.filter(n=>n.type==='select').slice(1).map(n=>n.props.value)).toEqual(['am','am']);
+});
+it('does not save a conflicting draft until current profile context is loaded and the user retries',async()=>{
+ const initial={name:'Fictional Person',displayName:'Example',email:'person@example.invalid',revision:1,personal:{'Residential address':'Old example','Postal code':'111111'},employment:{}};const requests:{url:string;body:any}[]=[];let refreshes=0;
+ vi.stubGlobal('fetch',async(url:string,options?:RequestInit)=>{requests.push({url,body:options?.body?JSON.parse(String(options.body)):null});if(url==='/api/employees/me'){refreshes++;if(refreshes===1)throw new Error('fictional outage');return {ok:true,json:async()=>({ok:true,value:{...initial,revision:4}})};}return {ok:false,status:409,json:async()=>({ok:false,code:'REVISION_CONFLICT'})};});
+ const view=()=>OwnProfile({initial});let nodes=render(view);byText(nodes,'Edit address').props.onClick();nodes=render(view);nodes.find(n=>n.props.id==='own-address')!.props.onChange({target:{value:'Retained example'}});nodes=render(view);const submit=()=>nodes.find(n=>n.type==='form')!.props.onSubmit({preventDefault(){}});submit();await settle();nodes=render(view);expect(nodes.find(n=>n.props.id==='own-address')!.props.value).toBe('Retained example');expect(byText(nodes,'Refresh profile')).toBeDefined();submit();await settle();nodes=render(view);expect(requests.map(r=>r.url)).toEqual(['/api/employees/me/address','/api/employees/me','/api/employees/me']);expect(byText(nodes,'Retry save')).toBeDefined();submit();await settle();expect(requests[3].body).toEqual({revision:4,address:'Retained example',postalCode:'111111'});
+});
+it('preserves separate periods for multiple dates and synchronizes them when the range becomes one day',()=>{
+ const view=()=>LeaveForm({employeeId:'fictional',admin:false,initial:{ok:true,value:{requests:[],remaining:{}}}});let nodes=render(view);const dates=()=>nodes.filter(n=>n.props.required&&typeof n.props.onChange==='function');dates()[0].props.onChange({target:{value:'2026-10-28'}});nodes=render(view);dates()[1].props.onChange({target:{value:'2026-10-29'}});nodes=render(view);nodes.filter(n=>n.type==='select')[1].props.onChange({target:{value:'pm'}});nodes=render(view);expect(nodes.filter(n=>n.type==='select').slice(1).map(n=>n.props.value)).toEqual(['pm','full']);dates()[1].props.onChange({target:{value:'2026-10-28'}});nodes=render(view);expect(nodes.filter(n=>n.type==='select').slice(1).map(n=>n.props.value)).toEqual(['pm','pm']);
+});

@@ -1,0 +1,3 @@
+import {headers} from 'next/headers';import {redirect} from 'next/navigation';import Link from 'next/link';import {getApplication} from '../../../server/runtime';import HistoryPanel from './history-panel';
+export const dynamic='force-dynamic';
+export default async function Payslips(){const r=await(await getApplication()).handle(new Request('http://localhost/api/payslips/history',{headers:await headers()}));if(r.status===401)redirect('/login');if(!r.ok)return <main><h1>Payslips</h1><p role="alert">Your payslips are unavailable. Please try again.</p></main>;const {value}=await r.json();return <main><h1>Payslips</h1><p>Browse by year and month.</p><HistoryPanel years={value.years} previewCount={value.previewCount}/><Link href="/employee">Back to your HR</Link></main>;}

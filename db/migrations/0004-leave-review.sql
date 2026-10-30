@@ -1,0 +1,10 @@
+ALTER TABLE leave_payroll_hold ADD COLUMN mode text NOT NULL DEFAULT 'correction-required' CHECK(mode IN ('retain-original-only','correction-required'));
+ALTER TABLE leave_payroll_hold ADD COLUMN source_request_id uuid REFERENCES leave_request(id);
+ALTER TABLE leave_payroll_hold ADD COLUMN source_revision integer;
+ALTER TABLE leave_payroll_hold ADD COLUMN proposal jsonb;
+ALTER TABLE leave_payroll_hold ADD COLUMN revision integer NOT NULL DEFAULT 1;
+ALTER TABLE leave_payroll_hold ADD COLUMN resolved_at timestamptz;
+ALTER TABLE leave_payroll_hold ADD COLUMN reviewed_by text REFERENCES "user"(id);
+ALTER TABLE leave_payroll_hold ADD COLUMN evidence text;
+ALTER TABLE leave_payroll_hold ADD COLUMN review_reason text;
+CREATE TABLE leave_review_receipt(actor_id text NOT NULL REFERENCES "user"(id),request_key text NOT NULL,fingerprint text NOT NULL,PRIMARY KEY(actor_id,request_key));

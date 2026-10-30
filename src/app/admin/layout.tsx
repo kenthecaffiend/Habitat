@@ -1,0 +1,3 @@
+import type{ReactNode}from'react';import{headers}from'next/headers';import{redirect}from'next/navigation';import{getApplication}from'../../server/runtime';
+export const dynamic='force-dynamic';
+export default async function AdminLayout({children}:{children:ReactNode}){const app=await getApplication(),response=await app.handle(new Request('http://localhost/api/employee',{headers:await headers()}));if(response.status===401)redirect('/login');if(!response.ok)return <main><h1>Access unavailable</h1></main>;const actor=await response.json();if(actor.role!=='admin')redirect('/employee');return children;}
