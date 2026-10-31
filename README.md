@@ -6,6 +6,12 @@ Habitat is designed around relevant Singapore employment requirements and guidan
 
 This is a source-review candidate, not a general production installer.
 
+## Admin dashboard
+
+![Habitat admin dashboard in dark mode with fictional employees and leave](docs/images/admin-dashboard-dark.png)
+
+Dark-mode example using fictional company, employees and records. No real employee or financial data is shown.
+
 ## Features
 
 - Administrator employee add, edit and archive with retained history; employee own-profile access and address/postal editing.
