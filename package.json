@@ -1,6 +1,6 @@
 {
-  "name": "private-hr",
-  "version": "0.0.1",
+  "name": "habitat",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,7 +16,8 @@
     "worker": "tsx src/worker/main.ts",
     "test:worker": "tsx tests/smoke/worker.ts",
     "test:recovery": "vitest run tests/integration/recovery.test.ts",
-    "acceptance:statutory": "tsx ops/statutory/acceptance-pack.ts"
+    "acceptance:statutory": "tsx ops/statutory/acceptance-pack.ts",
+    "demo": "tsx ops/demo/start.ts"
   },
   "engines": {
     "node": ">=24 <25"
